@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: marketplace
+      POSTGRES_USER: marketplace
+      POSTGRES_PASSWORD: marketplace
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketplace -d marketplace"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  flyway:
+    image: flyway/flyway:10
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      -url=jdbc:postgresql://db:5432/marketplace
+      -user=marketplace
+      -password=marketplace
+      -connectRetries=60
+      migrate
+    volumes:
+      - ./migrations:/flyway/sql:ro
+
+  app:
+    build: .
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://marketplace:marketplace@db:5432/marketplace
+      JWT_SECRET: super-secret-change-me
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TTL_MINUTES: 15
+      JWT_REFRESH_TTL_DAYS: 14
+      ORDER_RATE_LIMIT_MINUTES: 3
+      LOG_LEVEL: INFO
+    ports:
+      - "8080:8080"
